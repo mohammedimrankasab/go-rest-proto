@@ -1,0 +1,14 @@
+syntax="proto3";
+
+package protos;
+
+option go_package="github.com/mohammedimrankasab/go-rest-proto/protos";
+
+
+message HelloRequest{
+    string message=1;
+}
+
+message HelloResponse{
+    string message=1;
+}
