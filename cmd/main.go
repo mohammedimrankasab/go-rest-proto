@@ -2,30 +2,44 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
-	handlers "github.com/mohammedimrankasab/go-rest-proto/handlers"
-)
+	"github.com/rs/zerolog/log"
 
-const webServerPort = "8099"
+	handlers "github.com/mohammedimrankasab/go-rest-proto/handlers"
+	rest "github.com/mohammedimrankasab/go-rest-proto/rest/v1"
+)
 
 func main() {
 
 	app := handlers.Config{}
 
-	fmt.Println("Starting the API server on port", webServerPort)
-	r := mux.NewRouter()
-	r.HandleFunc("/echo", app.Hello).Methods("POST")
+	gracefulStop := make(chan error, 2)
+	listenForInterrupt(gracefulStop)
 
-	server := &http.Server{
-		Handler:      r,
-		Addr:         "0.0.0.0:" + webServerPort,
-		WriteTimeout: 2 * time.Second,
-		ReadTimeout:  2 * time.Second,
+	var s rest.Server
+
+	go func() {
+		s = rest.NewServer()
+		gracefulStop <- s.Serve(&app)
+	}()
+
+	sig := <-gracefulStop // <-- Blocking call
+	log.Info().Msgf("caught Signal: %+v", sig)
+	log.Info().Msg("wait for 2 second to finish processing")
+	if s != nil {
+		s.Stop()
 	}
+	time.Sleep(2 * time.Second)
+}
 
-	log.Fatal(server.ListenAndServe())
+func listenForInterrupt(errChan chan error) {
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		errChan <- fmt.Errorf("%s", <-c)
+	}()
 }
